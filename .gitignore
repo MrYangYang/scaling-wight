@@ -2,3 +2,5 @@ myls
 myls.o
 ~*
 *~
+test.c
+a.out

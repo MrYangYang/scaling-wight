@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 
 int main(int argc, char **argv)
 {
@@ -22,6 +23,7 @@ int main(int argc, char **argv)
                 break;
             case 'd':
                 dvalue = optarg;
+                printf("%d", strlen(dvalue));
                 break;
             default:
                 printf("myls: invalid option -- '%c'", c);
