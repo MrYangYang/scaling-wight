@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #define FILENAME_COLUMN     "File Name"
-#define CREATE_DATE_COLUMN  "Create Date"
+#define CREATE_DATE_COLUMN  "Last Visit Date"
 #define MOD_DATE_COLUMN     "Modified Date"
 #define PERMISSION_COLUMN   "Permissions"
 
@@ -37,23 +37,6 @@ int get_winsize_width()
     } 
     return size.ws_col;
 }
-
-/**
- * return non-zero value if all char in str is in [1-9]
- * zero otherwise.
- */
-int isNumbers(char *str)
-{
-    int len = strlen(str);
-    int i;
-    for(i = 0; i < len; i++){
-        if(!isdigit(str[i]))
-            return 0;
-    }
-
-    return 1;
-}
-
 
 /**
  * help text of command line args.
@@ -110,6 +93,32 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     return 0;
 }
 
+static char args_doc[] = "dir";
+static char doc[] = "a program like ls";
+static struct argp argp = {options, parse_opt, args_doc, doc};
+static int shell_width;
+static struct arguments arguments;
+
+/**
+ * return non-zero value if all char in str is in [1-9]
+ * zero otherwise.
+ */
+int isNumbers(char *str)
+{
+    int len = strlen(str);
+    int i;
+    for(i = 0; i < len; i++){
+        if(!isdigit(str[i]))
+            return 0;
+    }
+
+    return 1;
+}
+
+
+
+
+
 size_t get_dir_file_num(const char *path)
 {
     DIR *dir = opendir(path);
@@ -130,6 +139,7 @@ size_t get_dir_file_num(const char *path)
 }
 
 struct _myls_info {
+    size_t col_len;
     DIR *dir;
     struct dirent *cur_node;
     char *base_path;
@@ -146,7 +156,6 @@ int read_next(myls_info *ls_info)
     }
     ls_info->cur_node = readdir(ls_info->dir);
     if(ls_info->cur_node == NULL){
-        fprintf(stdout, "last node\n");
         return 0;
     }
     return 1;
@@ -168,9 +177,12 @@ void open_base_path(myls_info *ls_info, const char *basedir)
     }
 
     // init ls_info structure.
-    ls_info->base_path = basedir;
+    size_t len = strlen(basedir);
+    ls_info->base_path = g_malloc(len * sizeof(char));
+    strcpy(ls_info->base_path, basedir);
     ls_info->cur_node = NULL;
-    ls_info->table = g_hash_table_new(g_string_hash, g_string_equal);
+    ls_info->col_len = strlen(FILENAME_COLUMN);
+    ls_info->table = g_hash_table_new(g_str_hash, g_str_equal);
 }
 
 int get_file_num(myls_info *ls_info)
@@ -196,7 +208,7 @@ int get_file_num(myls_info *ls_info)
         }
     }
 
-    g_string_free(child_dir);
+    g_string_free(child_dir, TRUE);
     return count;
 }
 
@@ -204,12 +216,12 @@ void read_time(myls_info *ls_info, struct stat *buf)
 {
     // read modify date
     GList *mdates = g_hash_table_lookup(ls_info->table, MOD_DATE_COLUMN);
-    struct tm *m_tm = localtime(buf->st_mtime);
+    struct tm *m_tm = localtime(&(buf->st_mtime));
     GString *mdate = g_string_new(NULL);
-    g_string_print(mdate, "%4d-%2d-%2d %2d:%2d%2d",
+    g_string_printf(mdate, "%4d-%2d-%2d %2d:%2d:%2d",
             m_tm->tm_year + 1900,
             m_tm->tm_mon + 1,
-            m_tm->tm_yday + 1,
+            m_tm->tm_mday + 1,
             m_tm->tm_hour,
             m_tm->tm_min,
             m_tm->tm_sec);
@@ -219,12 +231,12 @@ void read_time(myls_info *ls_info, struct stat *buf)
     // read last use.
     GList *vdates = g_hash_table_lookup(ls_info->table, 
             CREATE_DATE_COLUMN);
-    struct tm *v_tm = localtime(buf->st_atime);
+    struct tm *v_tm = localtime(&(buf->st_atime));
     GString *vdate = g_string_new(NULL);
-    g_string_print(vdate, "%4d-%2d-%2d %2d:%2d%2d",
+    g_string_printf(vdate, "%4d-%2d-%2d %2d:%2d:%2d",
             v_tm->tm_year + 1900,
             v_tm->tm_mon + 1,
-            v_tm->tm_yday + 1,
+            v_tm->tm_mday + 1,
             v_tm->tm_hour,
             v_tm->tm_min,
             v_tm->tm_sec);
@@ -233,38 +245,38 @@ void read_time(myls_info *ls_info, struct stat *buf)
 
 }
 
-void read_stat(myls_info *ls_info, struct stat &buf)
+void read_stat(myls_info *ls_info, struct stat *buf)
 {
     GList *modes = g_hash_table_lookup(ls_info->table,
             PERMISSION_COLUMN);
     GString *permission = g_string_new(NULL);
 
-    if(S_IRGRP & buf.st_mode)
+    if(S_IRGRP & buf->st_mode)
         permission = g_string_append(permission, "r");
     else
         permission = g_string_append(permission, "-");
 
-    if(S_IWGRP & buf.st_mode)
+    if(S_IWGRP & buf->st_mode)
         permission = g_string_append(permission, "w");
     else
         permission = g_string_append(permission, "-");
 
-    if(S_IXGRP & buf.st_mode)
+    if(S_IXGRP & buf->st_mode)
         permission = g_string_append(permission, "x");
     else
         permission = g_string_append(permission, "-");
 
-    if(S_IROTH & buf.st_mode)
+    if(S_IROTH & buf->st_mode)
         permission = g_string_append(permission, "r");
     else
         permission = g_string_append(permission, "-");
 
-    if(S_IWOTH & buf.st_mode)
+    if(S_IWOTH & buf->st_mode)
         permission = g_string_append(permission, "w");
     else
         permission = g_string_append(permission, "-");
 
-    if(S_IXOTH & buf.st_mode)
+    if(S_IXOTH & buf->st_mode)
         permission = g_string_append(permission, "x");
     else
         permission = g_string_append(permission, "-");
@@ -275,15 +287,73 @@ void read_stat(myls_info *ls_info, struct stat &buf)
             modes);
 }
 
-static char args_doc[] = "dir";
-static char doc[] = "a program like ls";
-static struct argp argp = {options, parse_opt, args_doc, doc};
-static int shell_width;
+
+
+void print_data(myls_info *ls_info)
+{
+    GHashTable *table = ls_info->table;
+    char *format = "%%-%ds\t%%-%ds\t%%-%ds\t%%-%ds\n";
+    GString *temp_format = g_string_new(NULL);
+    /*g_string_printf(temp_format, 
+            format,
+            ls_info->col_len,
+            ls_info->col_len,
+            ls_info->col_len,
+            ls_info->col_len);*/
+    g_string_printf(temp_format, 
+            format,
+            ls_info->col_len,
+            19,
+            19,
+            10);
+
+    printf(temp_format->str,
+            FILENAME_COLUMN,
+            CREATE_DATE_COLUMN,
+            MOD_DATE_COLUMN,
+            PERMISSION_COLUMN);
+    GList *names = g_hash_table_lookup(table, FILENAME_COLUMN);
+    GList *adate = g_hash_table_lookup(table, CREATE_DATE_COLUMN);
+    GList *mdate = g_hash_table_lookup(table, MOD_DATE_COLUMN);
+    GList *permission = g_hash_table_lookup(table, PERMISSION_COLUMN);
+
+    GString *tmp_name;
+    GString *tmp_adate;
+    GString *tmp_mdata;
+    GString *tmp_permis;
+    while(names){
+        tmp_name = (GString *)names->data;
+        if(!arguments.lflag){
+            printf("%s\n", tmp_name->str);
+            names = g_list_next(names);
+            continue;
+        }
+        if(adate){
+            tmp_adate = (GString *)adate->data;
+            adate = g_list_next(adate);
+        }
+        if(mdate){
+            tmp_mdata = (GString *)mdate->data;
+            mdate = g_list_next(mdate);
+        }
+        if(permission){
+            tmp_permis = (GString *)permission->data;
+            permission = g_list_next(permission);
+        }
+
+        printf(temp_format->str,
+                tmp_name->str,
+                tmp_adate->str,
+                tmp_mdata->str,
+                tmp_permis->str);
+        names = g_list_next(names);
+    }
+}
+
 
 int main(int argc, char **argv)
 {
     // init arguments.
-    struct arguments arguments;
     arguments.arg[0] = NULL;
     arguments.lflag = 0;
     arguments.aflag = 0;
@@ -325,6 +395,11 @@ int main(int argc, char **argv)
                 g_hash_table_replace(ls_info.table, 
                         FILENAME_COLUMN,
                         names);
+                size_t tmp_len = strlen(name->str);
+
+                ls_info.col_len = tmp_len > ls_info.col_len? 
+                    tmp_len: ls_info.col_len;
+
                 if (arguments.lflag) { // -a -d -l
                     // read permission
                     struct stat buf;
@@ -352,6 +427,10 @@ int main(int argc, char **argv)
                 g_hash_table_replace(ls_info.table, 
                         FILENAME_COLUMN,
                         names);
+                size_t tmp_len = strlen(name->str);
+
+                ls_info.col_len = tmp_len > ls_info.col_len? 
+                    tmp_len: ls_info.col_len;
 
                 // -a -l
                 if (arguments.lflag) {
@@ -392,6 +471,10 @@ int main(int argc, char **argv)
                 g_hash_table_replace(ls_info.table, 
                         FILENAME_COLUMN,
                         names);
+                size_t tmp_len = strlen(name->str);
+
+                ls_info.col_len = tmp_len > ls_info.col_len? 
+                    tmp_len: ls_info.col_len;
 
                 if (arguments.lflag) {
                     // read permission
@@ -419,6 +502,10 @@ int main(int argc, char **argv)
                 g_hash_table_replace(ls_info.table, 
                         FILENAME_COLUMN,
                         names);
+                size_t tmp_len = strlen(name->str);
+
+                ls_info.col_len = tmp_len > ls_info.col_len? 
+                    tmp_len: ls_info.col_len;
 
                 // -l
                 if (arguments.lflag) {
@@ -442,9 +529,8 @@ int main(int argc, char **argv)
             }
         }}
 
-    printf("dir %s\n", arguments.arg[0]);
-    printf("lflag = %d, aflag = %d\n", arguments.lflag, arguments.aflag);
-    printf("dvalue = %s\n", arguments.dvalue);
+    print_data(&ls_info);
+
     return 0;
 }
 
