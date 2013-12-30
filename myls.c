@@ -5,7 +5,7 @@
 #include <argp.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
-
+#include <stdlib.h>
 /**
  * command line args structure
  */
@@ -126,26 +126,66 @@ struct _myls_info {
     DIR *dir;
     struct dirent *cur_node;
     char *base_path;
-    GList *target;
+    GHashTable *table;
 };
 
 typedef struct _myls_info myls_info;
 
-int read_next(myls_info *ls_info);
+int read_next(myls_info *ls_info)
+{
+    if(ls_info == NULL || ls_info->dir == NULL){
+        fprintf(stderr, "error, dir not open\n");
+        exit(1);
+    }
+    ls_info->cur_node = readdir(ls_info->dir);
+    if(ls_info->cur_node == NULL){
+        fprintf(stdout, "last node\n");
+        return 0;
+    }
 
+    return 1;
+}
+
+void open_base_path(myls_info *ls_info, const char *basedir)
+{
+    if(!ls_info){
+        fprintf(stderr, "cannot open dir with NULL myls_inf\n");
+        exit(1);
+    }
+
+    ls_info->dir = opendir(basedir);
+    if(ls_info->dir == NULL){
+        fprintf(stderr, "error open dir, path '%s'\n", basedir);
+        exit(1);
+    }
+}
+
+size_t get_file_num(myls_info *ls_info)
+{
+    size_t count = 0;
+    GString *child_dir = g_string_new(ls_info->base_path);
+    child_dir = g_string_append(child_dir, ls_info->cur_node->d_name);
+    DIR *tmp = opendir(child_dir->str);
+    struct dirent *tmp_dirent = NULL;
+    while((tmp_dirent = readdir(tmp)) != NULL){
+        if(strcmp(".", tmp_dirent->d_name) != 0
+                && strcmp("..", tmp_dirent->d_name) != 0){
+            count++;
+        }
+    }
+
+    return count;
+}
 
 static char args_doc[] = "dir";
-
 static char doc[] = "a program like ls";
-
 static struct argp argp = {options, parse_opt, args_doc, doc};
-
 static int shell_width;
 
 int main(int argc, char **argv)
 {
     shell_width = get_winsize_width();
-    
+
     struct arguments arguments;
 
     arguments.arg[0] = NULL;
@@ -165,49 +205,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "opendir %s failed.\n", arguments.arg[0]);
     }
 
-    struct dirent *cur_node = NULL;
     int dvalue_int = 0;
 
     if(arguments.dvalue){
         dvalue_int = atoi(arguments.dvalue);
     }
 
-    /*GList *temp_list = NULL;
-    GString *temp_name = NULL;
-    GString *temp_path = NULL;
-    struct stat info;
-    size_t temp_count;
-    while((cur_node = readdir(basedir)) != NULL){
 
-        // for . & ..
-        if(!strcmp(".", cur_node->d_name)
-                || !strcmp("..", cur_node->d_name)){
-            continue;
-        }
-
-        // read dir
-        temp_name = g_string_new(cur_node->d_name);
-        
-        // if has argument -d
-        if(arguments.dvalue){
-            temp_path = g_string_new(arguments.arg[0]);
-            temp_path = g_string_append(temp_path, cur_node->d_name);
-            stat(temp_path->str, &info);
-            
-            // if current node is a dir.
-            if(S_ISDIR(info.st_mode)){
-                temp_count = get_dir_file_num(temp_path->str);
-                
-                // if current node has more than dvalue files
-                if(temp_count >= dvalue_int)            
-                    temp_list = g_list_append(temp_list, temp_name);
-            }
-
-            continue;
-        } else {
-            
-        }
-    }*/
 
     printf("dir %s\n", arguments.arg[0]);
     printf("lflag = %d, aflag = %d\n", arguments.lflag, arguments.aflag);

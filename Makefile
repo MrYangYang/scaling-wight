@@ -1,9 +1,10 @@
 CC = gcc
-LIBS = `pkg-config --libs glib-2.0`
-CFLAGS = `pkg-config --cflags glib-2.0`
+LIBS = -lglib-2.0
+CFLAGS = -I/usr/include/glib-2.0 \
+		 -I/usr/lib/glib-2.0/include
 
 myls: myls.o
-	gcc -g -Wall myls.o -o myls
+	gcc -g -Wall $(CFLAGS) $(LIBS) myls.o -o myls
 
 clean:
 	rm myls.o myls
