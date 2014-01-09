@@ -294,12 +294,6 @@ void print_data(myls_info *ls_info)
     GHashTable *table = ls_info->table;
     char *format = "%%-%ds\t%%-%ds\t%%-%ds\t%%-%ds\n";
     GString *temp_format = g_string_new(NULL);
-    /*g_string_printf(temp_format, 
-            format,
-            ls_info->col_len,
-            ls_info->col_len,
-            ls_info->col_len,
-            ls_info->col_len);*/
     g_string_printf(temp_format, 
             format,
             ls_info->col_len,
